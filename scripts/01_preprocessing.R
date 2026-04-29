@@ -57,7 +57,8 @@ gbm <- SetAssayData(gbm, layer = "data", new.data = counts_mat)
 rm(counts_mat) # Free memory
 
 # 7. Feature Selection and Scaling
-gbm <- FindVariableFeatures(gbm, selection.method = "vst", nfeatures = 2000)
+# Use dispersion instead of vst as vst expects raw counts, while we have TPM
+gbm <- FindVariableFeatures(gbm, selection.method = "dispersion", nfeatures = 2000)
 gbm <- ScaleData(gbm, features = rownames(gbm))
 
 # 8. Generate Machine-Friendly QC Metrics (JSON)

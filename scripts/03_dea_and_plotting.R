@@ -14,8 +14,9 @@ dir.create("data/processed", showWarnings = FALSE, recursive = TRUE)
 # 1. Load Clustered Data
 gbm <- readRDS("data/processed/02_gbm_clustered.rds")
 
-# 2. Dynamically Identify the Target Cluster (Max ASGR2+ cells)
-# Instead of hardcoding '1', we find it programmatically based on expression
+# 2. Dynamically Identify the Target Cluster (Max ASGR2+ proportion)
+# Avoid cluster hijacking by background noise: select by max percentage, 
+# but require a minimum absolute count to prevent small-cluster artifacts.
 asgr2_expr <- GetAssayData(gbm, layer = "data")["ASGR2", ]
 asgr2_pos_cells <- names(asgr2_expr[asgr2_expr > 0])
 
@@ -23,11 +24,30 @@ if (length(asgr2_pos_cells) < 10) {
   stop("Not enough ASGR2+ cells across the entire dataset to perform robust DEA.")
 }
 
-# Count ASGR2+ cells per cluster
-cluster_counts <- table(Idents(gbm)[asgr2_pos_cells])
-target_cluster <- names(cluster_counts)[which.max(cluster_counts)]
+# Calculate percentages robustly
+cluster_totals <- table(Idents(gbm))
+asgr2_cluster_counts <- table(Idents(gbm)[asgr2_pos_cells])
 
-print(paste("Dynamically identified Cluster", target_cluster, "as the primary ASGR2+ niche."))
+# Align tables (handle clusters with 0 ASGR2+ cells)
+aligned_counts <- as.numeric(asgr2_cluster_counts[names(cluster_totals)])
+aligned_counts[is.na(aligned_counts)] <- 0
+
+# Calculate percentage
+asgr2_percentages <- (aligned_counts / as.numeric(cluster_totals)) * 100
+names(asgr2_percentages) <- names(cluster_totals)
+
+# Filter out clusters with less than 10 ASGR2+ cells to ensure statistical power
+valid_clusters <- names(cluster_totals)[aligned_counts >= 10]
+
+if (length(valid_clusters) == 0) {
+  stop("No individual cluster has enough ASGR2+ cells (>=10) for robust intra-cluster DEA.")
+}
+
+# Select the target cluster based on the maximum percentage among valid clusters
+valid_percentages <- asgr2_percentages[valid_clusters]
+target_cluster <- names(valid_percentages)[which.max(valid_percentages)]
+
+print(paste("Dynamically identified Cluster", target_cluster, "as the primary ASGR2+ niche based on max percentage."))
 
 # 3. Subset the Target Cluster (Macrophage/Microglia population)
 macrophages <- subset(gbm, idents = target_cluster)
@@ -51,12 +71,16 @@ dea_results <- FindMarkers(
   ident.1 = "Positive", 
   ident.2 = "Negative",
   test.use = "wilcox",
-  logfc.threshold = 0.25, # Standard threshold, kept conservative to capture subtle changes
-  min.pct = 0.1
+  logfc.threshold = 0.5,
+  min.pct = 0.25         
 )
 
 # Add gene names as a column for easier manipulation
 dea_results$gene <- rownames(dea_results)
+
+# Remove ASGR2 to avoid "Double Dipping" effect (it is the grouping variable, not a discovery)
+dea_results <- dea_results %>% filter(gene != "ASGR2")
+
 write.csv(dea_results, "results/03_ASGR2_DEA_results.csv", row.names = FALSE)
 
 # Filter for statistically significant genes (Adjusted P-value < 0.05)
