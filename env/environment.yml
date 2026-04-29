@@ -1,0 +1,19 @@
+name: gbm-asgr2-pipeline
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: flexible
+
+dependencies:
+  - r-base=4.3
+  - r-seurat=5.0.1
+  - r-seuratobject=5.0.1
+  - r-tidyverse
+  - r-patchwork
+  - r-matrix
+  - r-hdf5r
+  - bioconductor-clusterprofiler=4.10.0
+  - bioconductor-org.hs.eg.db=3.18.0
+  - bioconductor-enrichplot=1.22.0
+  - bioconductor-enhancedvolcano=1.20.0

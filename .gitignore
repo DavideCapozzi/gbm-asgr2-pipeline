@@ -1,0 +1,4 @@
+data/
+results/
+*.rds
+.Rproj.user
