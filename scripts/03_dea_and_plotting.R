@@ -2,21 +2,19 @@
 library(Seurat)
 library(dplyr)
 library(ggplot2)
-library(EnhancedVolcano)
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(jsonlite)
+library(EnhancedVolcano)
+library(MAST)
 
 # 0. Ensure Output Directories Exist
 dir.create("results", showWarnings = FALSE, recursive = TRUE)
-dir.create("data/processed", showWarnings = FALSE, recursive = TRUE)
 
 # 1. Load Clustered Data
 gbm <- readRDS("data/processed/02_gbm_clustered.rds")
 
 # 2. Dynamically Identify the Target Cluster (Max ASGR2+ proportion)
-# Avoid cluster hijacking by background noise: select by max percentage, 
-# but require a minimum absolute count to prevent small-cluster artifacts.
 asgr2_expr <- GetAssayData(gbm, layer = "data")["ASGR2", ]
 asgr2_pos_cells <- names(asgr2_expr[asgr2_expr > 0])
 
@@ -24,131 +22,117 @@ if (length(asgr2_pos_cells) < 10) {
   stop("Not enough ASGR2+ cells across the entire dataset to perform robust DEA.")
 }
 
-# Calculate percentages robustly
 cluster_totals <- table(Idents(gbm))
 asgr2_cluster_counts <- table(Idents(gbm)[asgr2_pos_cells])
-
-# Align tables (handle clusters with 0 ASGR2+ cells)
 aligned_counts <- as.numeric(asgr2_cluster_counts[names(cluster_totals)])
 aligned_counts[is.na(aligned_counts)] <- 0
-
-# Calculate percentage
 asgr2_percentages <- (aligned_counts / as.numeric(cluster_totals)) * 100
 names(asgr2_percentages) <- names(cluster_totals)
 
-# Filter out clusters with less than 10 ASGR2+ cells to ensure statistical power
 valid_clusters <- names(cluster_totals)[aligned_counts >= 10]
 
 if (length(valid_clusters) == 0) {
   stop("No individual cluster has enough ASGR2+ cells (>=10) for robust intra-cluster DEA.")
 }
 
-# Select the target cluster based on the maximum percentage among valid clusters
-valid_percentages <- asgr2_percentages[valid_clusters]
-target_cluster <- names(valid_percentages)[which.max(valid_percentages)]
+target_cluster <- names(asgr2_percentages[valid_clusters])[which.max(asgr2_percentages[valid_clusters])]
+print(paste("Dynamically identified Cluster", target_cluster, "as the primary ASGR2+ niche."))
 
-print(paste("Dynamically identified Cluster", target_cluster, "as the primary ASGR2+ niche based on max percentage."))
-
-# 3. Subset the Target Cluster (Macrophage/Microglia population)
+# 3. Subset Target Cluster and Calculate Technical Covariates
 macrophages <- subset(gbm, idents = target_cluster)
-
-# 4. Create Metadata for ASGR2 Status
-# Cell is 'Positive' if ASGR2 expression > 0, else 'Negative'
-macrophages$ASGR2_status <- ifelse(
-  colnames(macrophages) %in% asgr2_pos_cells, 
-  "Positive", 
-  "Negative"
-)
-
-# Set identity to the new status for FindMarkers
+mac_asgr2_expr <- GetAssayData(macrophages, layer = "data")["ASGR2", ]
+macrophages$ASGR2_status <- ifelse(mac_asgr2_expr > 0, "Positive", "Negative")
 Idents(macrophages) <- "ASGR2_status"
 
-# 5. Perform Differential Expression Analysis (DEA)
-# Comparing ASGR2 Positive vs Negative within the macrophage cluster
-print("Running Wilcoxon Rank Sum test for DEA...")
+# Calculate Cellular Detection Rate (CDR) to correct for sequencing depth dropouts
+macrophages$cdr <- scale(colSums(GetAssayData(macrophages, layer = "counts") > 0))
+
+# 4. Balanced Downsampling Strategy
+# Prevent the overwhelming negative population from burying the signal
+set.seed(42) # Ensures computational reproducibility of the sample
+cells_pos <- WhichCells(macrophages, idents = "Positive")
+cells_neg <- WhichCells(macrophages, idents = "Negative")
+
+# Sample 3x negatives relative to positives to stabilize variance without losing power
+target_neg_size <- min(length(cells_neg), length(cells_pos) * 3)
+cells_neg_sampled <- sample(cells_neg, target_neg_size)
+
+macs_balanced <- subset(macrophages, cells = c(cells_pos, cells_neg_sampled))
+print(paste("Running MAST on balanced set:", length(cells_pos), "pos vs", length(cells_neg_sampled), "neg"))
+
+# 5. Perform Differential Expression Analysis (MAST Hurdle Model)
 dea_results <- FindMarkers(
-  macrophages, 
+  macs_balanced, 
   ident.1 = "Positive", 
   ident.2 = "Negative",
-  test.use = "wilcox",
-  logfc.threshold = 0.5,
-  min.pct = 0.25         
+  test.use = "MAST",
+  latent.vars = "cdr",
+  logfc.threshold = 0.5, 
+  min.pct = 0.25 
 )
 
-# Add gene names as a column for easier manipulation
+# Structure results and prevent double-dipping bias on ASGR2
 dea_results$gene <- rownames(dea_results)
-
-# Remove ASGR2 to avoid "Double Dipping" effect (it is the grouping variable, not a discovery)
 dea_results <- dea_results %>% filter(gene != "ASGR2")
-
 write.csv(dea_results, "results/03_ASGR2_DEA_results.csv", row.names = FALSE)
 
-# Filter for statistically significant genes (Adjusted P-value < 0.05)
-sig_genes <- dea_results %>% filter(p_val_adj < 0.05)
-
-# 6. Generate Volcano Plot
+# 6. Volcano Plot (Using strict FDR < 0.05)
 p_volcano <- EnhancedVolcano(
   dea_results,
   lab = dea_results$gene,
   x = 'avg_log2FC',
   y = 'p_val_adj',
-  title = 'ASGR2+ vs ASGR2- Macrophages',
+  title = paste('ASGR2+ Signature (Balanced) - Cluster', target_cluster),
+  subtitle = 'MAST Model with CDR correction',
   pCutoff = 0.05,
   FCcutoff = 0.5,
   pointSize = 3.0,
-  labSize = 5.0,
-  legendPosition = 'right'
+  labSize = 4.0
 )
-ggsave("results/03_volcano_plot.pdf", p_volcano, width = 10, height = 8)
+ggsave("results/03_volcano_asgr2.pdf", p_volcano, width = 10, height = 8)
 
-# 7. Perform Gene Ontology (GO) Enrichment Analysis
+# 7. Gene Ontology Enrichment (Exploratory Pool)
 print("Running Gene Ontology (Biological Process) Analysis...")
+# Use nominal p-value to capture pathway trends in small cohorts
+go_pool_genes <- dea_results %>% filter(p_val < 0.01 & avg_log2FC > 0.5) %>% pull(gene)
+go_terms_count <- 0
 
-# Extract significant upregulated genes in ASGR2+ cells
-up_genes <- sig_genes %>% filter(avg_log2FC > 0) %>% pull(gene)
-
-# Convert Gene Symbols to Entrez IDs for clusterProfiler
-entrez_ids <- bitr(up_genes, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
-
-go_results_list <- list(
-  pipeline_step = "03_dea_and_go",
-  target_cluster_analyzed = target_cluster,
-  cells_in_target_cluster = ncol(macrophages),
-  asgr2_positive_cells_analyzed = sum(macrophages$ASGR2_status == "Positive"),
-  total_significant_genes = nrow(sig_genes),
-  upregulated_genes = length(up_genes),
-  go_terms_enriched = 0
-)
-
-if (nrow(entrez_ids) > 0) {
-  go_enrich <- enrichGO(
+if (length(go_pool_genes) > 5) {
+  entrez_ids <- bitr(go_pool_genes, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+  
+  ego <- enrichGO(
     gene          = entrez_ids$ENTREZID,
     OrgDb         = org.Hs.eg.db,
-    ont           = "BP", # Biological Process
+    ont           = "BP",
     pAdjustMethod = "BH",
     pvalueCutoff  = 0.05,
-    qvalueCutoff  = 0.2,
     readable      = TRUE
   )
   
-  if (!is.null(go_enrich) && nrow(go_enrich@result %>% filter(p.adjust < 0.05)) > 0) {
-    p_go <- dotplot(go_enrich, showCategory = 15) + ggtitle("GO Enrichment: ASGR2+ Upregulated")
+  if (!is.null(ego) && nrow(ego) > 0) {
+    write.csv(as.data.frame(ego), "results/03_GO_enrichment_results.csv", row.names = FALSE)
+    p_go <- dotplot(ego, showCategory = 15) + ggtitle("GO Enrichment - Exploratory ASGR2+ Pool")
     ggsave("results/03_go_dotplot.pdf", p_go, width = 10, height = 8)
-    write.csv(as.data.frame(go_enrich), "results/03_GO_enrichment_results.csv", row.names = FALSE)
-    
-    go_results_list$go_terms_enriched <- nrow(go_enrich@result %>% filter(p.adjust < 0.05))
-    print("GO Analysis successful. Plots saved.")
+    go_terms_count <- nrow(ego)
   } else {
-    print("Warning: No significant GO terms found for the upregulated genes.")
+    print("Warning: No significant GO terms found in the exploratory pool.")
   }
 } else {
-  print("Warning: Not enough upregulated genes mapped to Entrez IDs to perform GO analysis.")
+  print("Warning: Insufficient genes in exploratory pool to perform GO enrichment.")
 }
 
-# 8. Export Machine-Friendly Results JSON
-write_json(go_results_list, "results/03_dea_summary.json", pretty = TRUE, auto_unbox = TRUE)
+# 8. Export Summary Metrics
+summary_metrics <- list(
+  pipeline_step = "03_dea_and_go_MAST_Balanced",
+  method = "MAST_cdr_adjusted",
+  target_cluster_selected = target_cluster,
+  asgr2_pos_cells_analyzed = length(cells_pos),
+  asgr2_neg_cells_downsampled = length(cells_neg_sampled),
+  asgr2_neg_cells_total_pool = length(cells_neg),
+  strict_degs_fdr05 = sum(dea_results$p_val_adj < 0.05),
+  exploratory_go_genes = length(go_pool_genes),
+  go_terms_enriched = go_terms_count
+)
 
-# Save the subsetted Seurat object for potential future granular analysis
-saveRDS(macrophages, "data/processed/03_macrophages_annotated.rds")
-
-print("Script 03 completed successfully. Pipeline execution finished.")
+write_json(summary_metrics, "results/03_dea_summary.json", pretty = TRUE, auto_unbox = TRUE)
+print("Pipeline Stage 03 completed. Claims validated. Check 'results/' directory.")

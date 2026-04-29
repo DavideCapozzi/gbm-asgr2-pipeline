@@ -23,7 +23,7 @@ p_umap_clusters <- DimPlot(gbm, reduction = "umap", label = TRUE, pt.size = 0.5)
 ggsave("results/02_umap_clusters.pdf", p_umap_clusters, width = 8, height = 6)
 
 # 4. Define Canonical Markers
-target_markers <- c("CD68", "CD163", "AIF1", "CD14", "P2RY12", "ASGR2")
+target_markers <- c("CD68", "CD163", "AIF1", "CD14", "P2RY12", "ASGR2", "ITGA4")
 available_markers <- intersect(target_markers, rownames(gbm))
 missing_markers <- setdiff(target_markers, available_markers)
 
