@@ -2,3 +2,5 @@ data/
 results/
 *.rds
 .Rproj.user
+CLAUDE.md
+.claude

@@ -8,11 +8,20 @@ library(jsonlite)
 library(EnhancedVolcano)
 library(MAST)
 
+# Default config for standalone execution (GSM3828672 behaviour preserved)
+if (!exists("config")) {
+  config <- list(
+    dataset_id    = "GSM3828672",
+    results_dir   = "results/GSM3828672",
+    processed_dir = "data/processed/GSM3828672"
+  )
+}
+
 # 0. Ensure Output Directories Exist
-dir.create("results", showWarnings = FALSE, recursive = TRUE)
+dir.create(config$results_dir, showWarnings = FALSE, recursive = TRUE)
 
 # 1. Load Clustered Data
-gbm <- readRDS("data/processed/02_gbm_clustered.rds")
+gbm <- readRDS(file.path(config$processed_dir, "02_gbm_clustered.rds"))
 
 # 2. Dynamically Identify the Target Cluster (Max ASGR2+ proportion)
 asgr2_expr <- GetAssayData(gbm, layer = "data")["ASGR2", ]
@@ -49,7 +58,7 @@ macrophages$cdr <- scale(colSums(GetAssayData(macrophages, layer = "counts") > 0
 
 # 4. Balanced Downsampling Strategy
 # Prevent the overwhelming negative population from burying the signal
-set.seed(42) # Ensures computational reproducibility of the sample
+set.seed(42)
 cells_pos <- WhichCells(macrophages, idents = "Positive")
 cells_neg <- WhichCells(macrophages, idents = "Negative")
 
@@ -62,19 +71,19 @@ print(paste("Running MAST on balanced set:", length(cells_pos), "pos vs", length
 
 # 5. Perform Differential Expression Analysis (MAST Hurdle Model)
 dea_results <- FindMarkers(
-  macs_balanced, 
-  ident.1 = "Positive", 
+  macs_balanced,
+  ident.1 = "Positive",
   ident.2 = "Negative",
   test.use = "MAST",
   latent.vars = "cdr",
-  logfc.threshold = 0.5, 
-  min.pct = 0.25 
+  logfc.threshold = 0.5,
+  min.pct = 0.25
 )
 
 # Structure results and prevent double-dipping bias on ASGR2
 dea_results$gene <- rownames(dea_results)
 dea_results <- dea_results %>% filter(gene != "ASGR2")
-write.csv(dea_results, "results/03_ASGR2_DEA_results.csv", row.names = FALSE)
+write.csv(dea_results, file.path(config$results_dir, "03_ASGR2_DEA_results.csv"), row.names = FALSE)
 
 # 6. Volcano Plot (Using strict FDR < 0.05)
 p_volcano <- EnhancedVolcano(
@@ -89,17 +98,16 @@ p_volcano <- EnhancedVolcano(
   pointSize = 3.0,
   labSize = 4.0
 )
-ggsave("results/03_volcano_asgr2.pdf", p_volcano, width = 10, height = 8)
+ggsave(file.path(config$results_dir, "03_volcano_asgr2.pdf"), p_volcano, width = 10, height = 8)
 
 # 7. Gene Ontology Enrichment (Exploratory Pool)
 print("Running Gene Ontology (Biological Process) Analysis...")
-# Use nominal p-value to capture pathway trends in small cohorts
 go_pool_genes <- dea_results %>% filter(p_val < 0.01 & avg_log2FC > 0.5) %>% pull(gene)
 go_terms_count <- 0
 
 if (length(go_pool_genes) > 5) {
   entrez_ids <- bitr(go_pool_genes, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
-  
+
   ego <- enrichGO(
     gene          = entrez_ids$ENTREZID,
     OrgDb         = org.Hs.eg.db,
@@ -108,11 +116,11 @@ if (length(go_pool_genes) > 5) {
     pvalueCutoff  = 0.05,
     readable      = TRUE
   )
-  
+
   if (!is.null(ego) && nrow(ego) > 0) {
-    write.csv(as.data.frame(ego), "results/03_GO_enrichment_results.csv", row.names = FALSE)
+    write.csv(as.data.frame(ego), file.path(config$results_dir, "03_GO_enrichment_results.csv"), row.names = FALSE)
     p_go <- dotplot(ego, showCategory = 15) + ggtitle("GO Enrichment - Exploratory ASGR2+ Pool")
-    ggsave("results/03_go_dotplot.pdf", p_go, width = 10, height = 8)
+    ggsave(file.path(config$results_dir, "03_go_dotplot.pdf"), p_go, width = 7, height = 6)
     go_terms_count <- nrow(ego)
   } else {
     print("Warning: No significant GO terms found in the exploratory pool.")
@@ -123,16 +131,17 @@ if (length(go_pool_genes) > 5) {
 
 # 8. Export Summary Metrics
 summary_metrics <- list(
-  pipeline_step = "03_dea_and_go_MAST_Balanced",
-  method = "MAST_cdr_adjusted",
-  target_cluster_selected = target_cluster,
-  asgr2_pos_cells_analyzed = length(cells_pos),
+  pipeline_step              = "03_dea_and_go_MAST_Balanced",
+  dataset_id                 = config$dataset_id,
+  method                     = "MAST_cdr_adjusted",
+  target_cluster_selected    = target_cluster,
+  asgr2_pos_cells_analyzed   = length(cells_pos),
   asgr2_neg_cells_downsampled = length(cells_neg_sampled),
   asgr2_neg_cells_total_pool = length(cells_neg),
-  strict_degs_fdr05 = sum(dea_results$p_val_adj < 0.05),
-  exploratory_go_genes = length(go_pool_genes),
-  go_terms_enriched = go_terms_count
+  strict_degs_fdr05          = sum(dea_results$p_val_adj < 0.05),
+  exploratory_go_genes       = length(go_pool_genes),
+  go_terms_enriched          = go_terms_count
 )
 
-write_json(summary_metrics, "results/03_dea_summary.json", pretty = TRUE, auto_unbox = TRUE)
-print("Pipeline Stage 03 completed. Claims validated. Check 'results/' directory.")
+write_json(summary_metrics, file.path(config$results_dir, "03_dea_summary.json"), pretty = TRUE, auto_unbox = TRUE)
+print(paste("Pipeline Stage 03 completed for dataset:", config$dataset_id, ". Check", config$results_dir))

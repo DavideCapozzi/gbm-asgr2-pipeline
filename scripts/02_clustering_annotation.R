@@ -2,76 +2,96 @@
 library(Seurat)
 library(dplyr)
 library(ggplot2)
-library(jsonlite) 
+library(jsonlite)
+
+# Default config for standalone execution (GSM3828672 behaviour preserved)
+if (!exists("config")) {
+  config <- list(
+    dataset_id    = "GSM3828672",
+    use_harmony   = FALSE,
+    harmony_var   = NULL,
+    results_dir   = "results/GSM3828672",
+    processed_dir = "data/processed/GSM3828672"
+  )
+}
 
 # 0. Ensure Output Directories Exist
-dir.create("results", showWarnings = FALSE, recursive = TRUE)
-dir.create("data/processed", showWarnings = FALSE, recursive = TRUE)
+dir.create(config$results_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(config$processed_dir, showWarnings = FALSE, recursive = TRUE)
 
 # 1. Load Preprocessed Data
-gbm <- readRDS("data/processed/01_gbm_preprocessed.rds")
+gbm <- readRDS(file.path(config$processed_dir, "01_gbm_preprocessed.rds"))
 
 # 2. Dimensionality Reduction
 gbm <- RunPCA(gbm, npcs = 30, verbose = FALSE)
-gbm <- RunUMAP(gbm, dims = 1:20, verbose = FALSE)
-gbm <- FindNeighbors(gbm, dims = 1:20, verbose = FALSE)
+
+# 3. Optional Harmony Batch Correction (required for multi-sample 10X datasets)
+if (isTRUE(config$use_harmony)) {
+  library(harmony)
+  gbm <- RunHarmony(gbm, group.by.vars = config$harmony_var, verbose = FALSE)
+  reduction_use <- "harmony"
+} else {
+  reduction_use <- "pca"
+}
+
+gbm <- RunUMAP(gbm, dims = 1:20, reduction = reduction_use, verbose = FALSE)
+gbm <- FindNeighbors(gbm, dims = 1:20, reduction = reduction_use, verbose = FALSE)
 gbm <- FindClusters(gbm, resolution = 0.5, verbose = FALSE)
 
-# 3. Save Classic Seurat Colored UMAP Plot
-p_umap_clusters <- DimPlot(gbm, reduction = "umap", label = TRUE, pt.size = 0.5) + 
+# 4. Save UMAP Plot
+p_umap_clusters <- DimPlot(gbm, reduction = "umap", label = TRUE, pt.size = 0.5) +
   ggtitle("Global UMAP - Unannotated Clusters")
-ggsave("results/02_umap_clusters.pdf", p_umap_clusters, width = 8, height = 6)
+ggsave(file.path(config$results_dir, "02_umap_clusters.pdf"), p_umap_clusters, width = 8, height = 6)
 
-# 4. Define Canonical Markers
+# 5. Define Canonical Markers
 target_markers <- c("CD68", "CD163", "AIF1", "CD14", "P2RY12", "ASGR2", "ITGA4")
 available_markers <- intersect(target_markers, rownames(gbm))
-missing_markers <- setdiff(target_markers, available_markers)
+missing_markers <- setdiff(target_markers, rownames(gbm))
 
 if (length(missing_markers) > 0) {
   warning(paste("The following markers were not found in the dataset:", paste(missing_markers, collapse = ", ")))
 }
 
-# 5. Generate Marker FeaturePlots
+# 6. Generate Marker FeaturePlots
 if (length(available_markers) > 0) {
   p_markers <- FeaturePlot(gbm, features = available_markers, ncol = 3, pt.size = 0.5, order = TRUE)
-  ggsave("results/02_umap_macrophage_markers.pdf", p_markers, width = 15, height = 10)
+  ggsave(file.path(config$results_dir, "02_umap_macrophage_markers.pdf"), p_markers, width = 15, height = 10)
 }
 
-# 6. Generate Machine-Friendly DEA Feasibility Metrics (JSON)
-# We calculate cells per cluster and check ASGR2 positivity to evaluate if step 3 is statistically viable
+# 7. Generate Machine-Friendly DEA Feasibility Metrics (JSON)
 cluster_ids <- levels(Idents(gbm))
 feasibility_metrics <- list(
-  pipeline_step = "02_clustering",
-  total_clusters = length(cluster_ids),
-  ASGR2_present = "ASGR2" %in% available_markers,
-  cluster_stats = list()
+  pipeline_step   = "02_clustering",
+  dataset_id      = config$dataset_id,
+  batch_corrected = isTRUE(config$use_harmony),
+  total_clusters  = length(cluster_ids),
+  ASGR2_present   = "ASGR2" %in% available_markers,
+  cluster_stats   = list()
 )
 
 for (cluster in cluster_ids) {
   cells_in_cluster <- WhichCells(gbm, idents = cluster)
   cluster_total_cells <- length(cells_in_cluster)
-  
+
   cluster_data <- list(
-    cluster_id = cluster,
+    cluster_id  = cluster,
     total_cells = cluster_total_cells
   )
-  
-  # If ASGR2 exists, calculate how many cells express it (>0) in this cluster
+
   if (feasibility_metrics$ASGR2_present) {
     asgr2_expr <- GetAssayData(gbm, layer = "data")["ASGR2", cells_in_cluster]
     asgr2_pos_cells <- sum(asgr2_expr > 0)
-    
     cluster_data$ASGR2_positive_cells <- asgr2_pos_cells
     cluster_data$ASGR2_positivity_pct <- round((asgr2_pos_cells / cluster_total_cells) * 100, 2)
   }
-  
+
   feasibility_metrics$cluster_stats[[as.character(cluster)]] <- cluster_data
 }
 
-write_json(feasibility_metrics, "results/02_dea_feasibility.json", pretty = TRUE, auto_unbox = TRUE)
+write_json(feasibility_metrics, file.path(config$results_dir, "02_dea_feasibility.json"), pretty = TRUE, auto_unbox = TRUE)
 
 # Save the full clustered object to avoid re-running PCA/UMAP
-saveRDS(gbm, "data/processed/02_gbm_clustered.rds")
+saveRDS(gbm, file.path(config$processed_dir, "02_gbm_clustered.rds"))
 
-print("ACTION REQUIRED: Inspect results/02_umap_macrophage_markers.pdf and results/02_dea_feasibility.json.")
-print("Script 02 completed successfully. UMAP and Feasibility metrics exported.")
+print("ACTION REQUIRED: Inspect 02_umap_macrophage_markers.pdf and 02_dea_feasibility.json.")
+print(paste("Script 02 completed successfully for dataset:", config$dataset_id))

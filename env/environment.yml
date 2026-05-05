@@ -19,3 +19,4 @@ dependencies:
   - bioconductor-enrichplot=1.22.0
   - bioconductor-enhancedvolcano=1.20.0
   - bioconductor-mast
+  - r-harmony
