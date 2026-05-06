@@ -7,11 +7,12 @@ library(jsonlite)
 # Default config for standalone execution (GSM3828672 behaviour preserved)
 if (!exists("config")) {
   config <- list(
-    dataset_id    = "GSM3828672",
-    use_harmony   = FALSE,
-    harmony_var   = NULL,
-    results_dir   = "results/GSM3828672",
-    processed_dir = "data/processed/GSM3828672"
+    dataset_id        = "GSM3828672",
+    use_harmony       = FALSE,
+    harmony_var       = NULL,
+    genes_of_interest = c("ASGR2", "CLEC10A"),
+    results_dir       = "results/GSM3828672",
+    processed_dir     = "data/processed/GSM3828672"
   )
 }
 
@@ -44,7 +45,9 @@ p_umap_clusters <- DimPlot(gbm, reduction = "umap", label = TRUE, pt.size = 0.5)
 ggsave(file.path(config$results_dir, "02_umap_clusters.pdf"), p_umap_clusters, width = 8, height = 6)
 
 # 5. Define Canonical Markers
-target_markers <- c("CD68", "CD163", "AIF1", "CD14", "P2RY12", "ASGR2", "ITGA4")
+base_markers <- c("CD68", "CD163", "AIF1", "CD14", "P2RY12", "ITGA4", "CD36")
+genes_of_interest <- config$genes_of_interest
+target_markers <- unique(c(base_markers, genes_of_interest))
 available_markers <- intersect(target_markers, rownames(gbm))
 missing_markers <- setdiff(target_markers, rownames(gbm))
 
@@ -60,12 +63,13 @@ if (length(available_markers) > 0) {
 
 # 7. Generate Machine-Friendly DEA Feasibility Metrics (JSON)
 cluster_ids <- levels(Idents(gbm))
+genes_present <- intersect(genes_of_interest, available_markers)
 feasibility_metrics <- list(
   pipeline_step   = "02_clustering",
   dataset_id      = config$dataset_id,
   batch_corrected = isTRUE(config$use_harmony),
   total_clusters  = length(cluster_ids),
-  ASGR2_present   = "ASGR2" %in% available_markers,
+  genes_present   = genes_present,
   cluster_stats   = list()
 )
 
@@ -78,11 +82,11 @@ for (cluster in cluster_ids) {
     total_cells = cluster_total_cells
   )
 
-  if (feasibility_metrics$ASGR2_present) {
-    asgr2_expr <- GetAssayData(gbm, layer = "data")["ASGR2", cells_in_cluster]
-    asgr2_pos_cells <- sum(asgr2_expr > 0)
-    cluster_data$ASGR2_positive_cells <- asgr2_pos_cells
-    cluster_data$ASGR2_positivity_pct <- round((asgr2_pos_cells / cluster_total_cells) * 100, 2)
+  for (gene in genes_present) {
+    gene_expr <- GetAssayData(gbm, layer = "data")[gene, cells_in_cluster]
+    gene_pos <- sum(gene_expr > 0)
+    cluster_data[[paste0(gene, "_positive_cells")]] <- gene_pos
+    cluster_data[[paste0(gene, "_positivity_pct")]] <- round((gene_pos / cluster_total_cells) * 100, 2)
   }
 
   feasibility_metrics$cluster_stats[[as.character(cluster)]] <- cluster_data

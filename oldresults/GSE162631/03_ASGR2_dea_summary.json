@@ -1,0 +1,13 @@
+{
+  "pipeline_step": "03_dea_and_go_MAST_Balanced",
+  "dataset_id": "GSE162631",
+  "gene_of_interest": "ASGR2",
+  "method": "MAST_cdr_adjusted",
+  "target_cluster_selected": "3",
+  "pos_cells_analyzed": 538,
+  "neg_cells_downsampled": 1614,
+  "neg_cells_total_pool": 5068,
+  "strict_degs_fdr05": 109,
+  "exploratory_go_genes": 132,
+  "go_terms_enriched": 169
+}

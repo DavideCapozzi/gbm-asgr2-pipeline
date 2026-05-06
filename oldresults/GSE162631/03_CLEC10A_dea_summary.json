@@ -1,0 +1,13 @@
+{
+  "pipeline_step": "03_dea_and_go_MAST_Balanced",
+  "dataset_id": "GSE162631",
+  "gene_of_interest": "CLEC10A",
+  "method": "MAST_cdr_adjusted",
+  "target_cluster_selected": "13",
+  "pos_cells_analyzed": 142,
+  "neg_cells_downsampled": 426,
+  "neg_cells_total_pool": 522,
+  "strict_degs_fdr05": 117,
+  "exploratory_go_genes": 353,
+  "go_terms_enriched": 622
+}

@@ -1,0 +1,129 @@
+{
+  "pipeline_step": "02_clustering",
+  "dataset_id": "GSE162631",
+  "batch_corrected": true,
+  "total_clusters": 15,
+  "genes_present": ["ASGR2", "CLEC10A"],
+  "cluster_stats": {
+    "0": {
+      "cluster_id": "0",
+      "total_cells": 11254,
+      "ASGR2_positive_cells": 194,
+      "ASGR2_positivity_pct": 1.72,
+      "CLEC10A_positive_cells": 215,
+      "CLEC10A_positivity_pct": 1.91
+    },
+    "1": {
+      "cluster_id": "1",
+      "total_cells": 10716,
+      "ASGR2_positive_cells": 514,
+      "ASGR2_positivity_pct": 4.8,
+      "CLEC10A_positive_cells": 754,
+      "CLEC10A_positivity_pct": 7.04
+    },
+    "2": {
+      "cluster_id": "2",
+      "total_cells": 10417,
+      "ASGR2_positive_cells": 434,
+      "ASGR2_positivity_pct": 4.17,
+      "CLEC10A_positive_cells": 207,
+      "CLEC10A_positivity_pct": 1.99
+    },
+    "3": {
+      "cluster_id": "3",
+      "total_cells": 5606,
+      "ASGR2_positive_cells": 538,
+      "ASGR2_positivity_pct": 9.6,
+      "CLEC10A_positive_cells": 579,
+      "CLEC10A_positivity_pct": 10.33
+    },
+    "4": {
+      "cluster_id": "4",
+      "total_cells": 5344,
+      "ASGR2_positive_cells": 16,
+      "ASGR2_positivity_pct": 0.3,
+      "CLEC10A_positive_cells": 21,
+      "CLEC10A_positivity_pct": 0.39
+    },
+    "5": {
+      "cluster_id": "5",
+      "total_cells": 3361,
+      "ASGR2_positive_cells": 93,
+      "ASGR2_positivity_pct": 2.77,
+      "CLEC10A_positive_cells": 113,
+      "CLEC10A_positivity_pct": 3.36
+    },
+    "6": {
+      "cluster_id": "6",
+      "total_cells": 2406,
+      "ASGR2_positive_cells": 163,
+      "ASGR2_positivity_pct": 6.77,
+      "CLEC10A_positive_cells": 58,
+      "CLEC10A_positivity_pct": 2.41
+    },
+    "7": {
+      "cluster_id": "7",
+      "total_cells": 2237,
+      "ASGR2_positive_cells": 19,
+      "ASGR2_positivity_pct": 0.85,
+      "CLEC10A_positive_cells": 61,
+      "CLEC10A_positivity_pct": 2.73
+    },
+    "8": {
+      "cluster_id": "8",
+      "total_cells": 2127,
+      "ASGR2_positive_cells": 86,
+      "ASGR2_positivity_pct": 4.04,
+      "CLEC10A_positive_cells": 190,
+      "CLEC10A_positivity_pct": 8.93
+    },
+    "9": {
+      "cluster_id": "9",
+      "total_cells": 1881,
+      "ASGR2_positive_cells": 65,
+      "ASGR2_positivity_pct": 3.46,
+      "CLEC10A_positive_cells": 55,
+      "CLEC10A_positivity_pct": 2.92
+    },
+    "10": {
+      "cluster_id": "10",
+      "total_cells": 1724,
+      "ASGR2_positive_cells": 61,
+      "ASGR2_positivity_pct": 3.54,
+      "CLEC10A_positive_cells": 61,
+      "CLEC10A_positivity_pct": 3.54
+    },
+    "11": {
+      "cluster_id": "11",
+      "total_cells": 1033,
+      "ASGR2_positive_cells": 8,
+      "ASGR2_positivity_pct": 0.77,
+      "CLEC10A_positive_cells": 11,
+      "CLEC10A_positivity_pct": 1.06
+    },
+    "12": {
+      "cluster_id": "12",
+      "total_cells": 893,
+      "ASGR2_positive_cells": 11,
+      "ASGR2_positivity_pct": 1.23,
+      "CLEC10A_positive_cells": 20,
+      "CLEC10A_positivity_pct": 2.24
+    },
+    "13": {
+      "cluster_id": "13",
+      "total_cells": 664,
+      "ASGR2_positive_cells": 43,
+      "ASGR2_positivity_pct": 6.48,
+      "CLEC10A_positive_cells": 142,
+      "CLEC10A_positivity_pct": 21.39
+    },
+    "14": {
+      "cluster_id": "14",
+      "total_cells": 54,
+      "ASGR2_positive_cells": 3,
+      "ASGR2_positivity_pct": 5.56,
+      "CLEC10A_positive_cells": 1,
+      "CLEC10A_positivity_pct": 1.85
+    }
+  }
+}
