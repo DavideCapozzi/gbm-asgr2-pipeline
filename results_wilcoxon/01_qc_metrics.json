@@ -1,9 +1,0 @@
-{
-  "pipeline_step": "01_preprocessing",
-  "cells_total_raw": 7930,
-  "cells_total_filtered": 7427,
-  "survival_rate_pct": 93.66,
-  "median_nFeature_RNA": 5533,
-  "median_nCount_RNA": 14516.1017,
-  "median_percent_mt": 0
-}

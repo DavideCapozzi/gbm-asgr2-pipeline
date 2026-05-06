@@ -1,9 +1,0 @@
-{
-  "pipeline_step": "03_dea_and_go_MAST",
-  "target_cluster_selected": "3",
-  "asgr2_positive_cells": 61,
-  "asgr2_negative_cells": 692,
-  "strict_degs_fdr05": 2,
-  "exploratory_go_genes": 95,
-  "go_terms_enriched": 20
-}

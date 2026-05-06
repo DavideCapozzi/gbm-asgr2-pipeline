@@ -1,9 +1,0 @@
-{
-  "pipeline_step": "03_dea_and_go",
-  "target_cluster_analyzed": "3",
-  "cells_in_target_cluster": 753,
-  "asgr2_positive_cells_analyzed": 61,
-  "total_significant_genes": 3,
-  "upregulated_genes": 3,
-  "go_terms_enriched": 87
-}
