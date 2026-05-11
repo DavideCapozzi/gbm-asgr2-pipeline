@@ -4,7 +4,7 @@
 #   Rscript scripts/main.R GSE162631
 
 DATASET <- commandArgs(trailingOnly = TRUE)[1]
-if (is.na(DATASET)) DATASET <- "GSM3828672"
+if (is.na(DATASET)) DATASET <- "GSE162631"
 
 configs <- list(
   GSM3828672 = list(
