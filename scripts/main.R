@@ -43,7 +43,7 @@ configs <- list(
     harmony_var       = "sample",
     samples           = c("R1_T", "R2_T", "R3_T", "R4_T"),
     genes_of_interest = c("ASGR2", "CLEC10A"),
-    violin_genes      = NULL,
+    violin_genes      = c("MRC1"),   # immunosuppressive M2/TAM marker (pro-tumor narrative)
     results_dir       = "results/GSE162631",
     processed_dir     = "data/processed/GSE162631"
   )

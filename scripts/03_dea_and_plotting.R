@@ -15,6 +15,7 @@ if (!exists("config")) {
   config <- list(
     dataset_id        = "GSE162631",
     genes_of_interest = c("ASGR2"),
+    violin_genes      = NULL,
     results_dir       = "results/GSE162631",
     processed_dir     = "data/processed/GSE162631"
   )
@@ -130,8 +131,158 @@ for (gene in config$genes_of_interest) {
       panel.grid.major = element_line(color = "grey95")
     )
   ggsave(file.path(config$results_dir, paste0("03_volcano_", tolower(gene), ".pdf")), p_volcano, width = 9, height = 8)
-  
-  # --- 2. Top 25 DEGs DotPlot (Faceted Significance Approach) ---
+
+  # --- 2. Split Expression Plot: Frequency | Intensity ---
+  # Reflects the two components of the MAST hurdle model:
+  #   LEFT  panel: P(expression > 0) — the zero/non-zero component
+  #   RIGHT panel: E[expression | expressed] — the continuous component
+  # P-value annotation uses p_val_adj from dea_results directly (no recalculation).
+
+  # Resolve which DEG(s) to plot: config$violin_genes overrides, else top DEG by FDR
+  violin_candidates <- if (!is.null(config$violin_genes) && length(config$violin_genes) > 0) {
+    found <- intersect(config$violin_genes, dea_results$gene)
+    if (length(found) == 0)
+      warning(paste("None of config$violin_genes found in DEA results for", gene, "— using top DEG instead."))
+    found
+  } else {
+    character(0)
+  }
+
+  if (length(violin_candidates) == 0 && nrow(dea_results) > 0) {
+    # Base R ordering avoids S4Vectors::slice masking dplyr::slice after MAST loads
+    ordered_idx <- order(dea_results$p_val_adj, -dea_results$avg_log2FC)
+    violin_candidates <- dea_results$gene[ordered_idx[1]]
+  }
+
+  if (length(violin_candidates) > 0) {
+    n_vln <- length(violin_candidates)
+
+    # Extract normalised expression for all candidates at once
+    expr_mat <- as.matrix(GetAssayData(macs_balanced, layer = "data")[violin_candidates, , drop = FALSE])
+    plot_df <- do.call(rbind, lapply(violin_candidates, function(g) {
+      data.frame(
+        feature    = g,
+        status     = factor(macs_balanced$gene_status, levels = c("Positive", "Negative")),
+        expression = as.numeric(expr_mat[g, ]),
+        stringsAsFactors = FALSE
+      )
+    }))
+
+    # Map MAST p_val_adj to significance stars (reads dea_results, no recalculation)
+    pval_to_stars <- function(p) {
+      if (is.na(p) || p >= 0.05) "ns"
+      else if (p < 0.001) "***"
+      else if (p < 0.01)  "**"
+      else                 "*"
+    }
+
+    fill_colors <- c("Positive" = "#F8766D", "Negative" = "#00BFC4")
+    # ASCII-only title: avoids PDF font issues with Unicode dashes
+    plot_title  <- paste0(gene, "+ vs ", gene, "- cells | Cluster ", target_cluster)
+
+    base_theme <- theme_classic() +
+      theme(
+        legend.position = "none",
+        axis.text.x     = element_text(size = 11),
+        axis.title.y    = element_text(size = 9),
+        plot.title      = element_text(hjust = 0.5, face = "bold", size = 10)
+      )
+
+    # Build one frequency | intensity pair per candidate DEG
+    plot_pairs <- lapply(violin_candidates, function(g) {
+
+      gene_df <- plot_df[plot_df$feature == g, ]
+
+      # --- Frequency data: % cells with expression > 0 per group ---
+      pcts <- tapply(gene_df$expression > 0, gene_df$status,
+                     function(x) round(mean(x) * 100))
+      freq_df <- data.frame(
+        status = factor(names(pcts), levels = c("Positive", "Negative")),
+        pct    = as.numeric(pcts),
+        stringsAsFactors = FALSE
+      )
+
+      # --- Intensity data: only cells with expression > 0 ---
+      intens_df <- gene_df[gene_df$expression > 0, ]
+
+      # --- P-value annotation: pulled from MAST output, never recalculated ---
+      pval  <- dea_results$p_val_adj[match(g, dea_results$gene)]
+      if (length(pval) == 0 || is.na(pval)) pval <- 1
+      stars    <- pval_to_stars(pval)
+      pval_lab <- paste0("p.adj = ", formatC(pval, format = "e", digits = 2))
+
+      # Annotation y positions scaled to data range
+      y_max   <- if (nrow(intens_df) > 0) max(intens_df$expression, na.rm = TRUE) else 1
+      y_seg   <- y_max * 1.05   # bracket line just above violins
+      y_pval  <- y_max * 1.12   # p-value text above bracket
+      y_stars <- y_max * 1.20   # asterisks at the top
+
+      # LEFT panel: frequency barplot (hurdle component 1)
+      p_freq <- ggplot(freq_df, aes(x = status, y = pct, fill = status)) +
+        geom_col(width = 0.55, color = "black", linewidth = 0.3) +
+        geom_text(aes(label = paste0(pct, "%")),
+                  vjust = -0.4, size = 3.5, fontface = "bold") +
+        scale_fill_manual(values = fill_colors) +
+        scale_y_continuous(
+          limits = c(0, max(freq_df$pct, na.rm = TRUE) * 1.30),
+          expand = expansion(mult = c(0, 0))
+        ) +
+        labs(x = NULL, y = "% Expressing cells", title = g) +
+        base_theme
+
+      # RIGHT panel base: violin + boxplot when enough data, strip chart otherwise
+      if (nrow(intens_df) > 4) {
+        p_intens <- ggplot(intens_df, aes(x = status, y = expression, fill = status)) +
+          geom_violin(scale = "width", trim = TRUE, alpha = 0.85) +
+          stat_summary(fun = median, geom = "crossbar",
+                       width = 0.5, fatten = 0, color = "black", linewidth = 0.7)
+      } else {
+        # Sparse expressed cells: show individual points only
+        p_intens <- ggplot(intens_df, aes(x = status, y = expression, fill = status)) +
+          geom_jitter(shape = 21, width = 0.1, size = 2.5, alpha = 0.8, color = "grey30")
+      }
+
+      # Add MAST annotation, scales and theme to RIGHT panel
+      p_intens <- p_intens +
+        annotate("segment",
+                 x = 1.05, xend = 1.95, y = y_seg, yend = y_seg,
+                 color = "grey40", linewidth = 0.5) +
+        annotate("text",
+                 x = 1.5, y = y_pval, label = pval_lab,
+                 size = 2.8, color = "grey35") +
+        annotate("text",
+                 x = 1.5, y = y_stars, label = stars,
+                 size = 5.5, fontface = "bold") +
+        scale_fill_manual(values = fill_colors) +
+        scale_y_continuous(expand = expansion(mult = c(0.02, 0.30))) +
+        labs(x = NULL, y = "Expression (expressed cells only)",
+             title = paste0(g, " (expressed cells)")) +
+        base_theme
+
+      # Combine horizontally: frequency 40%, intensity 60%
+      p_freq + p_intens + plot_layout(widths = c(2, 3))
+    })
+
+    # Stack gene pairs vertically; Reduce handles n_vln == 1 correctly
+    p_final <- Reduce(`/`, plot_pairs) +
+      plot_annotation(
+        title = plot_title,
+        theme = theme(
+          plot.title = element_text(hjust = 0.5, face = "bold",
+                                    size = 12, margin = margin(b = 8))
+        )
+      )
+
+    ggsave(
+      file.path(config$results_dir, paste0("03_", gene, "_expression.pdf")),
+      p_final, width = 7, height = 5 * n_vln
+    )
+    print(paste("Split expression plot saved for:", paste(violin_candidates, collapse = ", ")))
+  } else {
+    print(paste("No genes available for expression plot for", gene, "— skipping."))
+  }
+
+  # --- 3. Top 25 DEGs DotPlot (Faceted Significance Approach) ---
   print("Generating Top 25 DEGs Dot Plot (Ordered by p_val_adj)...")
   
   # 1. Select the top 25 genes strictly by adjusted p-value (FDR)
@@ -221,9 +372,9 @@ for (gene in config$genes_of_interest) {
       write.csv(as.data.frame(ego),
                 file.path(config$results_dir, paste0("03_", gene, "_GO_enrichment_results.csv")),
                 row.names = FALSE)
-      p_go <- dotplot(ego, showCategory = 15) + ggtitle(paste("GO Enrichment -", gene, "Exploratory Pool"))
+      p_go <- dotplot(ego, showCategory = 15, label_format = 40) + ggtitle(paste("GO Enrichment -", gene, "Exploratory Pool"))
       ggsave(file.path(config$results_dir, paste0("03_go_dotplot_", tolower(gene), ".pdf")),
-             p_go, width = 8, height = 6)
+             p_go, width = 8, height = 10)
       go_terms_count <- nrow(ego)
     }
   }
