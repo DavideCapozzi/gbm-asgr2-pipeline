@@ -20,3 +20,6 @@ dependencies:
   - bioconductor-enhancedvolcano=1.20.0
   - bioconductor-mast
   - r-harmony
+  # pseudobulk DEA (patient-paired edgeR QL); Bioconductor 3.18 = R 4.3
+  - bioconductor-edger=4.0
+  - bioconductor-limma=3.58

@@ -43,6 +43,12 @@ fc_mean_fxn <- if (identical(config$norm_method, "log2tpm")) {
   function(x) log2((rowSums(expm1(x * log(2))) + 1) / NCOL(x))
 } else NULL
 
+# Multiple-testing label. FindMarkers' p_val_adj is a BONFERRONI correction over all
+# genes in the object (Seurat default), not BH/FDR. Every plot caption and the JSON
+# summary say so explicitly; the 0.05 threshold itself is unchanged.
+P_ADJ_METHOD <- "bonferroni"
+P_ADJ_LABEL  <- "adj. p (Bonferroni)"
+
 # Module-faceted DotPlot shared by the top-25 and top-10 plots.
 # `features` is the named list from build_module_feature_list(); genes in
 # `sig_genes` get a "*" appended to their x-axis label.
@@ -183,7 +189,9 @@ for (gene in config$genes_of_interest) {
     y        = 'p_val_adj',
     title    = paste0("Differential Expression: ", gene, "+ Macrophages"),
     subtitle = paste0('Dataset: ', config$dataset_id, ' | Hurdle Model (MAST)'),
-    caption  = "Cutoffs: FDR < 0.05 | Log2FC > 0.5",
+    caption  = paste0("Cutoffs: ", P_ADJ_LABEL, " < 0.05 | Log2FC > 0.5"),
+    ylab     = bquote(~-Log[10] ~ "adj. p (Bonferroni)"),
+    legendLabels = c("NS", "Log2 FC", "adj. p", "adj. p and Log2 FC"),
     pCutoff  = 0.05,
     FCcutoff = 0.5,
     pointSize = 2.5,
@@ -209,7 +217,7 @@ for (gene in config$genes_of_interest) {
   #   RIGHT panel: E[expression | expressed] — the continuous component
   # P-value annotation uses p_val_adj from dea_results directly (no recalculation).
 
-  # Resolve which DEG(s) to plot: config$violin_genes overrides, else top DEG by FDR
+  # Resolve which DEG(s) to plot: config$violin_genes overrides, else top DEG by adj. p (Bonferroni)
   violin_candidates <- if (!is.null(config$violin_genes) && length(config$violin_genes) > 0) {
     found <- intersect(config$violin_genes, dea_results$gene)
     if (length(found) == 0)
@@ -280,7 +288,7 @@ for (gene in config$genes_of_interest) {
       pval  <- dea_results$p_val_adj[match(g, dea_results$gene)]
       if (length(pval) == 0 || is.na(pval)) pval <- 1
       stars    <- pval_to_stars(pval)
-      pval_lab <- paste0("p.adj = ", formatC(pval, format = "e", digits = 2))
+      pval_lab <- paste0("p.adj (Bonf.) = ", formatC(pval, format = "e", digits = 2))
 
       # Annotation y positions scaled to data range
       y_max   <- if (nrow(intens_df) > 0) max(intens_df$expression, na.rm = TRUE) else 1
@@ -356,7 +364,7 @@ for (gene in config$genes_of_interest) {
   # --- 3. Top 25 DEGs DotPlot (Faceted Significance Approach) ---
   print("Generating Top 25 DEGs Dot Plot (Ordered by p_val_adj)...")
   
-  # 1. Select the top 25 genes strictly by adjusted p-value (FDR)
+  # 1. Select the top 25 genes strictly by adjusted p-value (Bonferroni)
   top_degs_df <- dea_results %>%
     filter(p_val_adj < 0.05) %>%
     arrange(p_val_adj) %>%
@@ -369,7 +377,7 @@ for (gene in config$genes_of_interest) {
     #    encodes direction completely. Grouping is the more informative axis order.
     top_degs_df <- top_degs_df %>%
       mutate(module = assign_gene_modules(gene)) %>%
-      arrange(p_val_adj) # within each module panel: FDR-ascending
+      arrange(p_val_adj) # within each module panel: adj.-p ascending
 
     top25_features <- build_module_feature_list(top_degs_df$gene, top_degs_df$module)
     print("Functional module assignment for the top 25 DEGs:")
@@ -377,7 +385,7 @@ for (gene in config$genes_of_interest) {
 
     # 3. Generate the Plot leveraging the binary nature of 2-group scaling
     p_dot <- module_dotplot(macrophages, top25_features,
-                            paste0("Top 25 DEGs by FDR, grouped by function: ", gene, " + vs ", gene, " -"))
+                            paste0("Top 25 DEGs by ", P_ADJ_LABEL, ", grouped by function: ", gene, " + vs ", gene, " -"))
 
     ggsave(file.path(gene_dir, paste0("03_top25_dotplot_", tolower(gene), ".pdf")), p_dot, width = 14, height = 5)
   } else {
@@ -385,8 +393,8 @@ for (gene in config$genes_of_interest) {
   }
 
   # Nominal p-value ranking shared by the top-10 and top-100 plots. Unlike the
-  # top-25 plot these do not filter on FDR (so they also render for low-power
-  # datasets); FDR < 0.05 genes are marked with "*" instead.
+  # top-25 plot these do not filter on adj. p (so they also render for low-power
+  # datasets); genes with Bonferroni adj. p < 0.05 are marked with "*" instead.
   # Base R ordering avoids S4Vectors::slice masking dplyr::slice after MAST loads
   ranked_df <- dea_results[order(dea_results$p_val, -abs(dea_results$avg_log2FC)), ]
   sig_genes <- ranked_df$gene[ranked_df$p_val_adj < 0.05]
@@ -402,7 +410,7 @@ for (gene in config$genes_of_interest) {
   for (dir_name in names(direction_sets)) {
     dir_df <- direction_sets[[dir_name]]
     if (nrow(dir_df) == 0) next
-    # Same deterministic module grouping as the top-25 plot; FDR-ascending within panels
+    # Same deterministic module grouping as the top-25 plot; p-ascending within panels
     dir_features <- build_module_feature_list(dir_df$gene, assign_gene_modules(dir_df$gene))
     updown_plots[[dir_name]] <- module_dotplot(
       macrophages, dir_features,
@@ -413,7 +421,7 @@ for (gene in config$genes_of_interest) {
 
   if (length(updown_plots) > 0) {
     missing_dirs <- setdiff(names(direction_sets), names(updown_plots))
-    updown_caption <- paste0("Top 10 per direction by nominal p-value; * = FDR < 0.05",
+    updown_caption <- paste0("Top 10 per direction by nominal p-value; * = ", P_ADJ_LABEL, " < 0.05",
                              if (length(missing_dirs) > 0)
                                paste0(" | no genes with ", paste(missing_dirs, collapse = "/"), " fold change"))
     p_top10 <- Reduce(`/`, updown_plots) +
@@ -483,7 +491,7 @@ for (gene in config$genes_of_interest) {
       scale_x_discrete(position = "top", expand = c(0, 0)) +
       labs(x = NULL, y = NULL,
            title = paste0("Top ", nrow(top100_df), " DEGs by p-value\n", gene, "+ vs ", gene, "-"),
-           caption = paste0("Rows ordered by nominal p-value\n* = FDR < 0.05",
+           caption = paste0("Rows ordered by nominal p-value\n* = ", P_ADJ_LABEL, " < 0.05",
                             if (fc_capped)
                               paste0("\nColour capped at |log2FC| = ", round(fc_lim, 2), " (98th pct)"),
                             if (length(fc_cols) > 1)
@@ -579,7 +587,8 @@ for (gene in config$genes_of_interest) {
     pos_cells_analyzed   = length(cells_pos),
     neg_cells_downsampled = length(cells_neg_sampled),
     neg_cells_total_pool = length(cells_neg),
-    strict_degs_fdr05    = sum(dea_results$p_val_adj < 0.05),
+    p_adjust_method      = P_ADJ_METHOD,
+    strict_degs_padj05   = sum(dea_results$p_val_adj < 0.05),
     exploratory_go_genes = length(go_pool_genes),
     go_terms_enriched    = go_terms_count
   )
