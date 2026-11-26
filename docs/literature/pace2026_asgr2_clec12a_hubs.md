@@ -1,6 +1,6 @@
 # Pace, Alfano et al. 2026 — ASGR2 and CLEC12A as C-type lectin hubs in GBM
 
-`[VERIFIED 2026-11-23 against the PMC full text; supplementary tables NOT read (MDPI returned 403)]`
+`[VERIFIED 2026-11-23 against the PMC full text; supplementary Tables S1–S2 VERIFIED 2026-11-27 via Europe PMC /supplementaryFiles]`
 
 | | |
 |---|---|
@@ -9,8 +9,15 @@
 | Type | Original research: bulk transcriptomics network analysis + flow cytometry |
 
 **Important:** this paper is about **ASGR2 and CLEC12A**, not MGL. CLEC10A is not among its
-hubs, and it is mentioned only in the discussion (citing Dusoswa 2020). Whether CLEC10A was in
-the 39-lectin network is unknown: the lectin list is in Supplementary Table S2, not read.
+hubs, and it is mentioned only in the discussion (citing Dusoswa 2020).
+
+**CLEC10A is in the network** `[VERIFIED 2026-11-27]`: Supplementary Table S1 ("Fold change of
+lectins in TCGA vs GTEx differential co-expression network") lists exactly 39 lectins, including
+CLEC10A (FoldChange 2.22, p = 1.25e-06). In the same table ASGR2 = −1.28 (p = 3.38e-18) and
+CLEC12A = 3.07 (p = 1.10e-15); negative values imply a log scale, but the column is labelled only
+"FoldChange". So CLEC10A is up in tumour and in the network but **not a hub**; the hub ASGR2 is
+**down** in tumour vs GTEx brain. Table S2 lists the 67 starting lectins with +/− marks per
+cohort; its column layout does not survive text extraction, so use S1 for network membership.
 
 ## Data and methods
 
