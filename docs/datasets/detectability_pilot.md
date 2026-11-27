@@ -8,7 +8,7 @@ Status 2026-11-27 (laptop): **NOT MEASURED. Blocked on environment.** No numbers
 - Ensembl ids of the 14 genes resolved via WMG `primary_filter_dimensions`.
 
 ## What failed
-- Laptop: no `pip`, no `ensurepip` (`python3.10-venv` not installed) → no `~/.venvs/census`. Bootstrapping pip from a downloaded script was blocked by the permission classifier. Fix: `sudo apt install python3.10-venv python3-pip`, then `python3 -m venv ~/.venvs/census && ~/.venvs/census/bin/pip install cellxgene-census`.
+- Laptop: no `pip`, no `ensurepip` (`python3.10-venv` not installed) → no `~/.venvs/census`. Bootstrapping pip from a downloaded script was blocked by the permission classifier. Fix (simulated safe: 3 packages, 0 removals, 0 upgrades): `sudo apt install --no-install-recommends python3.10-venv`, then `python3 -m venv ~/.venvs/census && ~/.venvs/census/bin/pip install cellxgene-census`.
 - Fallback WMG API (`/wmg/v2/query`): dataset-filtered queries (Core GBmap, glioma atlas) fail with a server-side schema error (empty result); disease-filtered (MONDO:0018177) queries return HTTP 500, with and without `compare`.
 
 ## Ready to run
