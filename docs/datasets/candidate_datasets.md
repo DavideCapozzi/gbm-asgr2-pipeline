@@ -18,7 +18,20 @@ Screened 2026-11-23. Accessions, file names and sizes were read from GEO
 | GSM3828672 (in GSE131928) | Neftel 2019, Cell | Smart-seq2, TPM | 7,427 cells; includes CD45− sorted samples (MGH128–152); CLEC10A target cluster 14 was astrocytic → invalid, see `PLAN_clec10a_consensus.md` |
 | GSE162631 | Xie 2021 | 10X, raw counts | R1_T–R4_T tumour, 59,717 cells; CLEC10A target cluster 13 = cDC2 |
 
-## Ranking
+## Provisional selection (session 3, 2026-11-27) — for storyline (a), ADR 0001
+
+**Detection rates NOT MEASURED yet** (pilot blocked, see `detectability_pilot.md`). Order is by stated requirements only.
+
+| # | dataset | serves | requirement met (stated, not measured) | ASGR2 / CLEC10A % in myeloid | pipeline cost | access |
+|---|---|---|---|---|---|---|
+| 1 | Core + Extended GBmap (CELLxGENE `c888b684…`, `56c4912d…`) | (a) screen, all patients | many studies/patients, CL myeloid labels; mixed chemistry | not measured (pilot script ready) | none: Census query of 14 genes | public, Census |
+| 2 | GSE163120 (ND + R + CITE-seq) | (a), (c) | CD45+, author TAM/DC labels, CD301/CD371 ADT, 3 pts CITE | not measured | `csv_dense` loader | GEO |
+| 3 | GSE182109 | (a) | 11 ndGBM + 5 rGBM, 10x v3, whole TME | not measured | `10x_flat_mtx` loader | GEO |
+| 4 | Glioma cohort atlas (CELLxGENE `8f3cb9c4…`) | (a) replication | 66 samples, 10x v3, IDH-wt GBM + IDH-mut | not measured | none: Census | public, Census |
+| 5 | GSE162631 (done) | (a) baseline | 4 pts, 10x; CLEC10A cluster = cDC2 (E13) | not measured (workstation `.rds`) | done | on workstation |
+Johnson 2021 (Synapse) and Mei 2023: not added (access unchecked); GBmap likely already includes several GEO sets above (overlap to check from donor ids).
+
+## Ranking (screen of 2026-11-23)
 
 | # | Accession | Study | Cells / patients (GBM) | Sorting | Files on GEO | Pipeline effort | Priority |
 |---|---|---|---|---|---|---|---|
@@ -34,7 +47,7 @@ Screened 2026-11-23. Accessions, file names and sizes were read from GEO
 
 | Accession / resource | Reason |
 |---|---|
-| GBmap (Ruiz-Moreno 2025, Neuro-Oncology; own data GSE211376) — 1.1 M cells, 240 pts, 26 datasets | Best for a final atlas-level check, but h5ad + harmonised labels, outside the pipeline. Overlaps with most datasets above. CELLxGENE availability `[UNVERIFIED]` |
+| GBmap (Ruiz-Moreno 2025, Neuro-Oncology; own data GSE211376) — 1.1 M cells, 240 pts, 26 datasets | Best for a final atlas-level check, but h5ad + harmonised labels, outside the pipeline. Overlaps with most datasets above. on CELLxGENE: Core `c888b684…`, Extended `56c4912d…`, collection `999f2a15…` [VERIFIED 2026-11-27] |
 | Ravi 2022, Cancer Cell — Visium, Dryad doi:10.5061/dryad.h70rxwdmj (~10 GB) | Spatial modality; good later for CLEC10A+ myeloid niches vs hypoxia/Tn-synthesis, not for DEA replication |
 | Klemm 2020, Cell — sorted immune populations, bulk RNA-seq, 48 pts | Bulk, not sc; quick sanity check of CLEC10A by sorted population if data are accessible `[UNVERIFIED access]` |
 | GSE138794 (Wang 2019) | Mixed gliomas, sc + sn, raw data restricted |

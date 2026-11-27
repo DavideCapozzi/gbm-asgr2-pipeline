@@ -1,0 +1,67 @@
+"""Detectability pilot: % cells > 0 and mean in positives for 14 lectin/marker genes,
+per source dataset x cell type x donor, from CELLxGENE Census (obs + 14 genes only).
+
+Run:  ~/.venvs/census/bin/python scripts/pilot/census_detectability.py [census_version]
+Out:  results/pilot/detectability_long.tsv, results/pilot/detectability_myeloid_wide.tsv
+Needs: pip install cellxgene-census (venv needs python3.10-venv: `sudo apt install python3.10-venv`).
+Never loads the full matrix: var filter keeps 14 genes (~1.1 M cells x 14 sparse ints).
+"""
+import sys, pathlib
+import numpy as np, pandas as pd
+import cellxgene_census
+
+GENES = ["ASGR2", "CLEC12A", "CLEC10A", "SIGLEC9", "SIGLEC7", "CD163", "TGFBI",
+         "P2RY12", "TMEM119", "ITGA4", "CD1C", "FCER1A", "C1QA", "PTPRC"]
+# Verified on CELLxGENE curation API 2026-11-27.
+DATASETS = {
+    "c888b684-6c51-431f-972a-6c963044cef0": "Core GBmap",
+    "56c4912d-2bae-4b64-98f2-af8a84389208": "Extended GBmap",
+    "8f3cb9c4-38d5-4b9c-b309-bcccd76d0075": "Glioma cohort atlas (66 samples, MedComm 2026)",
+    "21722308-5091-4b63-9c07-4f116ab9a7b3": "SL040 (bioRxiv 2023.09.01.555882)",
+    "145dcf6a-2461-4fa3-a0af-7fc56db0bd33": "SL057 (bioRxiv 2023.09.01.555882)",
+    "774c18c5-efa1-4dc5-9e5e-2c824bab2e34": "Darmanis 2017 (Smart-seq2)",
+}
+MYELOID = ("macrophage", "microglial cell", "monocyte", "dendritic cell", "myeloid",
+           "mononuclear phagocyte", "neutrophil", "conventional dendritic cell")
+OBS = ["dataset_id", "donor_id", "cell_type", "disease", "assay", "tissue", "is_primary_data", "raw_sum"]  # raw_sum = UMI depth (skeptic: depth confound)
+
+def main(version="stable"):
+    out = pathlib.Path("results/pilot"); out.mkdir(parents=True, exist_ok=True)
+    ids = "', '".join(DATASETS)
+    with cellxgene_census.open_soma(census_version=version) as census:
+        ad = cellxgene_census.get_anndata(
+            census, organism="Homo sapiens", X_name="raw",
+            obs_value_filter=f"dataset_id in ['{ids}']",
+            var_value_filter=f"feature_name in {GENES}", column_names={"obs": OBS})
+    X = ad.X.tocsc(); genes = ad.var["feature_name"].tolist()
+    obs = ad.obs.reset_index(drop=True)
+    obs["dataset"] = obs["dataset_id"].map(DATASETS)
+    rows = []
+    for key, idx in obs.groupby(["dataset", "cell_type", "donor_id"], observed=True).indices.items():
+        sub = X[idx]
+        for j, g in enumerate(genes):
+            col = sub[:, j].toarray().ravel()
+            pos = col > 0
+            rows.append((*key, g, len(idx), 100 * pos.mean(), col[pos].mean() if pos.any() else 0.0))
+    long = pd.DataFrame(rows, columns=["dataset", "cell_type", "donor_id", "gene", "n_cells", "pct_gt0", "mean_in_pos"])
+    long.to_csv(out / "detectability_long.tsv", sep="\t", index=False)
+    mye = long[long.cell_type.str.contains("|".join(MYELOID), case=False)]
+    # per dataset x cell type: pooled %, n donors with >=50 cells, n donors with pct>=5
+    agg = (mye.assign(w=mye.n_cells * mye.pct_gt0 / 100)
+              .groupby(["dataset", "cell_type", "gene"])
+              .apply(lambda d: pd.Series({
+                  "n_cells": d.n_cells.sum(),
+                  "pct_gt0": 100 * d.w.sum() / d.n_cells.sum(),
+                  "donors_ge50": (d.n_cells >= 50).sum(),
+                  "donors_pct_ge5": ((d.n_cells >= 50) & (d.pct_gt0 >= 5)).sum()})))
+    wide = agg["pct_gt0"].unstack("gene").round(2)
+    wide.to_csv(out / "detectability_myeloid_wide.tsv", sep="\t")
+    agg.to_csv(out / "detectability_myeloid_agg.tsv", sep="\t")
+    print(wide.to_string())
+    # stop rule (session 3): ASGR2 < 1% in all datasets' macrophages
+    asgr2 = agg.xs("ASGR2", level="gene")
+    print("\nASGR2 max pooled % in myeloid types:", asgr2.pct_gt0.max().round(2),
+          "-> STOP RULE HIT" if asgr2.pct_gt0.max() < 1 else "-> continue")
+
+if __name__ == "__main__":
+    main(*sys.argv[1:2])

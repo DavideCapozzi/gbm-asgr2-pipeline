@@ -28,3 +28,6 @@ Each file has a single purpose; read only the one you need.
 - Dates are absolute (YYYY-MM-DD). Accessions are given exactly as on GEO/PMC.
 - The execution plan and phase roadmap are local-only (gitignored) files in the repo root:
   `PLAN_clec10a_consensus.md`, `ROADMAP_clec10a_extension.md`.
+- `docs/decisions/0001-storyline.md` — ADR: storyline (a) chosen, (c) reserve, dataset requirements
+- `docs/datasets/detectability_pilot.md` — CELLxGENE pilot status (GBmap ids; not measured yet)
+- `scripts/pilot/census_detectability.py` — Census 14-gene detectability pilot
