@@ -18,18 +18,19 @@ Screened 2026-11-23. Accessions, file names and sizes were read from GEO
 | GSM3828672 (in GSE131928) | Neftel 2019, Cell | Smart-seq2, TPM | 7,427 cells; includes CD45− sorted samples (MGH128–152); CLEC10A target cluster 14 was astrocytic → invalid, see `PLAN_clec10a_consensus.md` |
 | GSE162631 | Xie 2021 | 10X, raw counts | R1_T–R4_T tumour, 59,717 cells; CLEC10A target cluster 13 = cDC2 |
 
-## Provisional selection (session 3, 2026-11-27) — for storyline (a), ADR 0001
+## Final selection (session 4, 2026-11-27) — storyline (a), ADR 0001
 
-**Detection rates NOT MEASURED yet** (pilot blocked, see `detectability_pilot.md`). Order is by stated requirements only.
+Measured on Core GBmap (`detectability_pilot.md`). Ordered by what each adds once Core GBmap is in hand.
 
-| # | dataset | serves | requirement met (stated, not measured) | ASGR2 / CLEC10A % in myeloid | pipeline cost | access |
+| # | dataset | serves | requirement | ASGR2 / CLEC10A % > 0 (myeloid) | pipeline cost | access |
 |---|---|---|---|---|---|---|
-| 1 | Core + Extended GBmap (CELLxGENE `c888b684…`, `56c4912d…`) | (a) screen, all patients | many studies/patients, CL myeloid labels; mixed chemistry | not measured (pilot script ready) | none: Census query of 14 genes | public, Census |
-| 2 | GSE163120 (ND + R + CITE-seq) | (a), (c) | CD45+, author TAM/DC labels, CD301/CD371 ADT, 3 pts CITE | not measured | `csv_dense` loader | GEO |
-| 3 | GSE182109 | (a) | 11 ndGBM + 5 rGBM, 10x v3, whole TME | not measured | `10x_flat_mtx` loader | GEO |
-| 4 | Glioma cohort atlas (CELLxGENE `8f3cb9c4…`) | (a) replication | 66 samples, 10x v3, IDH-wt GBM + IDH-mut | not measured | none: Census | public, Census |
-| 5 | GSE162631 (done) | (a) baseline | 4 pts, 10x; CLEC10A cluster = cDC2 (E13) | not measured (workstation `.rds`) | done | on workstation |
-Johnson 2021 (Synapse) and Mei 2023: not added (access unchecked); GBmap likely already includes several GEO sets above (overlap to check from donor ids).
+| 1 | Core GBmap `c888b684…` | (a) main screen, 103 donors | **measured**: ASGR2 8/65 donors ≥ 5% macrophages; CLEC10A 25/55 donors ≥ 2% CD163+; sanity markers pass | macrophage 3.3 / 6.2 · microglia 1.5 / 0.9 · monocyte 9.9 / 15.5 · DC 9.7 / 35.7 | none (Census, 95 s); fine labels (Mo-/Mg-TAM, cDC2) need the h5ad obs | public, Census |
+| 2 | GSE163120 CITE-seq (GSM4972212, 3 pts) | (c) protein: CD301/MGL, CD371/CLEC12A ADT | stated: ADT panel verified (E12); RNA likely already in Core (`R`/`ND` donors) | RNA in Core; ADT not measured | `csv_dense` loader, ADT only (2.7 MB + RNA CSV) | GEO |
+| 3 | Glioma cohort atlas `8f3cb9c4…` | (a) independent replication, 66 samples | stated; **not in Census 2025-11-08** | not in Census | h5ad (size to check with `curl -sI`) or newer Census | public, CELLxGENE |
+| 4 | Extended GBmap `56c4912d…` | (a) more donors | stated; contains Core | not measured (cannot change the choice) | Census, ~3× Core | public, Census |
+| 5 | GSE162631 (done) | (a) baseline | E13 CLEC10A cluster = cDC2 | not measured (workstation `.rds`) | done | workstation |
+
+Dropped from the shortlist: GSE182109 (2.46 GB RAW.tar; donor overlap with Core `BT`/`SF` prefixes to check before any download), Neftel GSM3828673 (in Core as `MGH`), GSE235676 / GSE154795 (w = 3, metadata only).
 
 ## Ranking (screen of 2026-11-23)
 
