@@ -25,10 +25,11 @@ def rank(f, asked=None):
         ratio = pct.get(MAC, 0) / max(pct.get(MIC, 0), 0.1)
         out.append(dict(gene=g, best_type=best, best_pct=round(pct.max(), 1),
                         donors_ge5_best=int((d >= 5).sum()), donors_best=len(d),
+                        frac_donors_ge5=round((d >= 5).mean(), 2) if len(d) else 0.0,
                         mac_pct=round(pct.get(MAC, 0), 1), mic_pct=round(pct.get(MIC, 0), 1),
                         mac_mic_ratio=round(ratio, 2), depth_sign_consistent=f"{max((sign > 0).sum(), (sign < 0).sum())}/3",
                         dc_pct=round(pct.get("dendritic cell", 0), 1), mono_pct=round(pct.get("monocyte", 0), 1)))
-    r = pd.DataFrame(out).sort_values(["donors_ge5_best", "best_pct"], ascending=False)
+    r = pd.DataFrame(out).sort_values(["frac_donors_ge5", "best_pct"], ascending=False)
     r.to_csv("results/pilot/panel_rank.tsv", sep="\t", index=False); print(r.to_string(index=False))
     if asked:
         miss = [g for g in asked if g not in genes]; print("not in Census var:", ", ".join(miss) or "none")
