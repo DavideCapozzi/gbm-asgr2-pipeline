@@ -6,12 +6,17 @@ Out:  results/pilot/detectability_long.tsv, results/pilot/detectability_myeloid_
 Needs: pip install cellxgene-census (venv needs python3.10-venv: `sudo apt install python3.10-venv`).
 Never loads the full matrix: var filter keeps 14 genes (~1.1 M cells x 14 sparse ints).
 """
-import sys, pathlib
+import sys, os, pathlib
 import numpy as np, pandas as pd
 import cellxgene_census
 
 GENES = ["ASGR2", "CLEC12A", "CLEC10A", "SIGLEC9", "SIGLEC7", "CD163", "TGFBI",
          "P2RY12", "TMEM119", "ITGA4", "CD1C", "FCER1A", "C1QA", "PTPRC"]
+# PILOT_GENES = comma list or file (one symbol per line, '#' comments) overrides the default 14 genes.
+_g = os.environ.get("PILOT_GENES")
+if _g:
+    _src = open(_g).read().splitlines() if os.path.isfile(_g) else _g.split(",")
+    GENES = [x.split("#")[0].strip() for x in _src if x.split("#")[0].strip()]
 # Verified on CELLxGENE curation API 2026-11-27.
 DATASETS = {
     "c888b684-6c51-431f-972a-6c963044cef0": "Core GBmap",
@@ -54,13 +59,13 @@ def main(version="2025-11-08"):
     # PILOT_BUFFER (bytes) shrinks TileDB read buffers; 2**28 stalled remote reads >20 min (2026-11-27). Default off.
     buf = os.environ.get("PILOT_BUFFER")
     ctx = tiledbsoma.SOMATileDBContext(tiledb_config={"soma.init_buffer_bytes": int(buf)}) if buf else None
+    tag = ("_" + only.replace(",", "_") if only else "") + ("_panel" if os.environ.get("PILOT_GENES") else "")
     rows, cells = [], []
     with cellxgene_census.open_soma(census_version=version, **({"context": ctx} if ctx else {})) as census:
         for dsid, name in ds.items():
             r, c = fetch(census, dsid, name); rows += r; cells.append(c)
-    pd.concat(cells).to_csv(out / f"myeloid_cells{'_' + only.replace(',', '_') if only else ''}.tsv.gz", sep="\t", index=False)
+    pd.concat(cells).to_csv(out / f"myeloid_cells{tag}.tsv.gz", sep="\t", index=False)
     long = pd.DataFrame(rows, columns=["dataset", "cell_type", "donor_id", "gene", "n_cells", "pct_gt0", "mean_in_pos"])
-    tag = "_" + only.replace(",", "_") if only else ""
     long.to_csv(out / f"detectability_long{tag}.tsv", sep="\t", index=False)
     mye = long[long.cell_type.str.contains("|".join(MYELOID), case=False)]
     # per dataset x cell type: pooled %, n donors with >=50 cells, n donors with pct>=5

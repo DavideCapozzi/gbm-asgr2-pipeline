@@ -1,9 +1,45 @@
 """Checks on the pilot per-cell myeloid tables (results/pilot/myeloid_cells_<id>.tsv.gz):
 table for docs, sanity markers, ADR requirements per donor, ASGR2 depth confound, donor-id prefixes.
 Run: ~/.venvs/census/bin/python scripts/pilot/pilot_checks.py results/pilot/myeloid_cells_*.tsv.gz
+Rank: ... pilot_checks.py --rank results/pilot/myeloid_cells_<tag>.tsv.gz [--genes scripts/pilot/<list>.txt]
+      -> results/pilot/panel_rank.tsv (one row per gene; genes asked but absent from Census are listed)
 """
 import sys, re
 import pandas as pd
+OBSC = ["dataset", "donor_id", "cell_type", "assay", "is_primary_data", "raw_sum"]
+MAC, MIC = "macrophage", "microglial cell"
+
+def rank(f, asked=None):
+    c = pd.read_csv(f, sep="\t"); genes = [g for g in c.columns if g not in OBSC]
+    mm = c[c.cell_type.isin([MAC, MIC])].copy()
+    mm["terc"] = pd.qcut(mm.raw_sum, 3, labels=["low", "mid", "high"])
+    big = c.groupby(["cell_type", "donor_id"]).size().ge(50)
+    out = []
+    for g in genes:
+        pct = (c[g] > 0).groupby(c.cell_type).mean().mul(100)
+        best = pct.idxmax()
+        d = c[c.cell_type == best].groupby("donor_id")[g].apply(lambda x: 100 * (x > 0).mean())
+        d = d[d.index.isin(big[best][big[best]].index)]
+        t = (mm[g] > 0).groupby([mm.terc, mm.cell_type], observed=True).mean().unstack()
+        sign = (t[MAC] - t[MIC]).apply(lambda v: 1 if v > 0 else -1)
+        ratio = pct.get(MAC, 0) / max(pct.get(MIC, 0), 0.1)
+        out.append(dict(gene=g, best_type=best, best_pct=round(pct.max(), 1),
+                        donors_ge5_best=int((d >= 5).sum()), donors_best=len(d),
+                        mac_pct=round(pct.get(MAC, 0), 1), mic_pct=round(pct.get(MIC, 0), 1),
+                        mac_mic_ratio=round(ratio, 2), depth_sign_consistent=f"{max((sign > 0).sum(), (sign < 0).sum())}/3",
+                        dc_pct=round(pct.get("dendritic cell", 0), 1), mono_pct=round(pct.get("monocyte", 0), 1)))
+    r = pd.DataFrame(out).sort_values(["donors_ge5_best", "best_pct"], ascending=False)
+    r.to_csv("results/pilot/panel_rank.tsv", sep="\t", index=False); print(r.to_string(index=False))
+    if asked:
+        miss = [g for g in asked if g not in genes]; print("not in Census var:", ", ".join(miss) or "none")
+
+if len(sys.argv) > 1 and sys.argv[1] == "--rank":
+    a = sys.argv[2:]; asked = None
+    if "--genes" in a:
+        i = a.index("--genes"); gf = a[i + 1]; a = a[:i] + a[i + 2:]
+        asked = [x.split("#")[0].strip() for x in open(gf) if x.split("#")[0].strip()]
+    rank(a[0], asked); sys.exit(0)
+
 G = ["ASGR2", "CLEC10A", "SIGLEC9", "CLEC12A", "TMEM119", "P2RY12", "CD163"]
 for f in sys.argv[1:]:
     c = pd.read_csv(f, sep="\t")
